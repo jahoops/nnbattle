@@ -1,0 +1,30 @@
+{
+    // Set the default interpreter path to your Conda environment
+    "python.defaultInterpreterPath": "/home/j/anaconda3/envs/pytorch_env/bin/python",
+
+    // Enable automatic environment activation in the terminal
+    "python.terminal.activateEnvironment": true,
+
+    // Specify the path to the Conda executable
+    "python.condaPath": "/home/j/anaconda3/condabin/conda",
+
+    // (Optional) Clear any custom PATH settings
+    "terminal.integrated.env.linux": {},
+
+    // Keep other existing settings
+    "terminal.integrated.profiles.linux": {
+        "Conda (pytorch_env)": {
+            "path": "bash",
+            "args": [
+                "-c",
+                "source /home/j/.bashrc && conda activate pytorch_env && exec bash"
+            ],
+            "icon": "terminal-bash"
+        }
+    },
+    "terminal.integrated.defaultProfile.linux": null,
+
+    // settings.json
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": true
+}

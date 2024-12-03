@@ -1,0 +1,37 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Docker Image",
+            "type": "shell",
+            "command": "docker build -t pytorch-project .",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Build C Project",
+            "type": "shell",
+            "command": "gcc",
+            "args": [
+                "-o",
+                "mymodule",
+                "mymodule.c",
+                "-I/usr/include/python3.8",
+                "-lpython3.8"
+            ],
+            "options": {
+                "env": {
+                    "C_INCLUDE_PATH": "/usr/include/python3.8:${env:C_INCLUDE_PATH}"
+                }
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "problemMatcher": ["$gcc"]
+        }
+    ]
+}

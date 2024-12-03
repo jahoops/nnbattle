@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+lightning_logs/
+nnbattle.egg-info/
+tb_logs/
+model/
+*.log
+*.yaml

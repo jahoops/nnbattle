@@ -1,0 +1,51 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Train AlphaZero",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/review_game.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Python: Attach to Docker",
+            "type": "debugpy",
+            "request": "attach",
+            "connect": {
+                "host": "localhost",
+                "port": 5680
+            },
+            "pathMappings": [
+                {
+                    "localRoot": "${workspaceFolder}",
+                    "remoteRoot": "/pyAgent_C4"
+                }
+            ]
+        },
+        {
+            "name": "C: Launch",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/mymodule",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "Build C Project",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "logging": {
+                "engineLogging": true
+            }
+        }
+    ]
+}
