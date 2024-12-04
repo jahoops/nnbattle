@@ -8,7 +8,7 @@ import sys
 # Set up logging to output to console at INFO level
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-def evaluate_agent(agent, num_games=5, temperature=0.1):
+def evaluate_agent(agent, num_games, temperature):
     """Evaluate agent performance against random opponent."""
     wins = 0
     draws = 0
@@ -57,12 +57,11 @@ def evaluate_agent(agent, num_games=5, temperature=0.1):
 def train_alphazero(
     agent,
     max_iterations,
-    num_self_play_games,
+    self_play_games_per_round,
     initial_mcts_simulations_per_move,  # Renamed parameter
     max_mcts_simulations_per_move,      # Renamed parameter
     simulation_increase_interval,       # Parameter for increasing simulations
     num_evaluation_games,
-    evaluation_frequency,
     use_gpu,
     save_checkpoint,
     checkpoint_frequency,
@@ -140,7 +139,7 @@ def train_alphazero(
     # Modify DataLoader settings for better training
     data_module = ConnectFourDataModule(
         agent, 
-        num_games=num_self_play_games,
+        self_play_games_per_round=self_play_games_per_round,
         batch_size=data_module_params.get('batch_size', 1024),
         num_workers=data_module_params.get('num_workers', os.cpu_count()),
         persistent_workers=True
@@ -155,13 +154,14 @@ def train_alphazero(
     self_play = SelfPlay(
         game=game,
         model=agent.model,
-        num_simulations=10,  # Reduced for testing
+        mcts_simulations_per_move=agent.mcts_simulations_per_move,  # Reduced for testing
         agent=agent
     )
     
     logger.info("Starting training loop...")
     try:
-        training_data = self_play.generate_training_data(num_self_play_games)
+        print(f"Starting training loop for {self_play_games_per_round} self play games")
+        training_data = self_play.generate_training_data(self_play_games_per_round)
         logger.info(f"Generated {len(training_data)} training examples")
         
         if not training_data:
@@ -169,10 +169,10 @@ def train_alphazero(
             return
             
         data_module.dataset = ConnectFourDataset(training_data)
-        logger.info(f"Dataset created with {len(data_module.dataset)} examples")
+        print(f"Dataset created with {len(data_module.dataset)} examples")
         
         data_module.setup('fit')
-        logger.info("Data module setup completed")
+        print("Data module setup completed")
         
     except Exception as e:
         logger.error(f"Error during training initialization: {e}")
@@ -185,7 +185,7 @@ def train_alphazero(
 
     data_module.dataset = ConnectFourDataset(training_data)
 
-    logger.info(f"Generated {len(data_module.dataset)} training examples.")
+    print(f"Generated {len(data_module.dataset)} training examples.")
 
     data_module.setup('fit')
 
@@ -209,6 +209,7 @@ def train_alphazero(
     # Add manual early stopping logic
     best_loss = float('inf')
     patience_counter = 0
+    patience = 10  # Define patience value
 
     # Add manual progress reporting
     def log_progress(iteration, total_iterations, elapsed_time):
@@ -237,11 +238,18 @@ def train_alphazero(
         
         for iteration in range(1, max_iterations + 1):
             performance = None  # Initialize performance at start of each iteration
-            # Adjust temperature parameter
-            if iteration < max_iterations * 0.5:
-                temperature = 1.0  # High temperature for more exploration
+            # Implement temperature scheduling
+            if iteration < max_iterations * 0.75:
+                # High temperature (1.0) for exploration in early training
+                temperature = 1.0
+            elif iteration < max_iterations * 0.9:
+                # Medium temperature (0.5) for transition
+                temperature = 0.5
             else:
-                temperature = 0.1  # Low temperature for more exploitation
+                # Low temperature (0.1) for exploitation in late training
+                temperature = 0.1
+
+            print(f"Iteration {iteration}: Using temperature {temperature}")
 
             # Adjust c_puct parameter
             agent.c_puct = 1.4 if iteration < max_iterations * 0.5 else 1.0
@@ -257,17 +265,21 @@ def train_alphazero(
             agent.mcts_simulations_per_move = current_mcts_simulations_per_move
             logger.info(f"Using {current_mcts_simulations_per_move} MCTS simulations per move for iteration {iteration}")
             
+            # Gradually increase simulations to balance speed and quality
+            current_mcts_simulations = min(
+                initial_mcts_simulations_per_move + (iteration * 5),  # Increase by 5 each iteration
+                max_mcts_simulations_per_move
+            )
+            agent.mcts_simulations_per_move = current_mcts_simulations
+
             # Log training parameters
-            logger.info(f"=== Starting Training Iteration {iteration}/{max_iterations} ===")
-            logger.info(f"MCTS Simulations: {current_mcts_simulations_per_move}")
-            logger.info(f"Temperature: {temperature}, c_puct: {agent.c_puct}")
-            
-            logger.info(f"=== Starting Training Iteration {iteration}/{max_iterations} ===")
-            logger.info(f"Using temperature: {temperature}, c_puct: {agent.c_puct}")
-            logger.info(f"Starting team: {starting_team}")
+            print(f"=== Starting Training Iteration {iteration}/{max_iterations} ===")
+            print(f"MCTS Simulations: {current_mcts_simulations_per_move}")
+            print(f"Temperature: {temperature}, c_puct: {agent.c_puct}")
+            print(f"Starting team: {starting_team}")
             iteration_start_time = time.time()
             try:
-                logger.info(f"Generating {num_self_play_games} self-play games...")
+                logger.info(f"Generating {self_play_games_per_round} self-play games...")
                 log_gpu_info(agent)  # Before generating self-play games
                 data_module.generate_self_play_games(temperature=temperature)
                 logger.info("Self-play games generated.")
@@ -289,7 +301,7 @@ def train_alphazero(
                     best_loss = current_loss
                     patience_counter = 0
                     save_agent_model(agent)
-                    logger.info(f"New best loss: {best_loss}. Model saved.")
+                    print(f"New best loss: {best_loss}. Model saved.")
                 else:
                     patience_counter += 1
                     if patience_counter >= patience:
@@ -297,13 +309,13 @@ def train_alphazero(
                         break
 
                 # Optionally evaluate the model
-                if iteration % 1 == 0:  # Evaluate every iteration
+                if iteration % 20 == 0:  # Evaluate every iteration
                     # Ensure CUDA tensors are properly handled
                     with torch.cuda.device(agent.device):
                         performance = evaluate_agent(agent, num_games=5)
                         torch.cuda.empty_cache()  # Clear cache after evaluation
                     
-                    logger.info(f"Iteration {iteration}: Evaluation Performance: {performance}")
+                    print(f"Iteration {iteration}: Evaluation Performance: {performance}")
                     if performance > best_performance:
                         best_performance = performance
                         no_improvement_count = 0
@@ -313,17 +325,17 @@ def train_alphazero(
                             best_model_path = "mnt/ramdisk/alphazero_model_best.pth"
                             torch.save(agent.model.state_dict(), checkpoint_path)
                             torch.save(agent.model.state_dict(), best_model_path)
-                            logger.info(f"New best performance: {best_performance}. Models saved.")
+                            print(f"New best performance: {best_performance}. Models saved.")
                     else:
                         no_improvement_count += 1
-                        logger.info(f"No improvement in performance. ({no_improvement_count}/{patience})")
+                        print(f"No improvement in performance. ({no_improvement_count}/{patience})")
                         if no_improvement_count >= patience:
-                            logger.info("Early stopping triggered due to no improvement.")
+                            print("Early stopping triggered due to no improvement.")
                             break
 
                 # Evaluate and save more frequently
-                if iteration % evaluation_frequency == 0:
-                    win_rate = evaluate_agent(agent, num_evaluation_games)
+                if iteration % 20 == 0:
+                    win_rate = evaluate_agent(agent, num_evaluation_games, temperature=0.1)
                     logger.info(f"Iteration {iteration}: Win Rate = {win_rate:.2f}")
                     
                     if win_rate > best_win_rate:
@@ -348,7 +360,7 @@ def train_alphazero(
                     torch.cuda.empty_cache()
                 continue
             finally:
-                logger.info(f"Iteration {iteration} completed in {time.time() - iteration_start_time:.2f} seconds")
+                print(f"Iteration {iteration} completed in {time.time() - iteration_start_time:.2f} seconds")
                 logger.info(f"=== Completed Iteration {iteration} ===")
                 if use_gpu and torch.cuda.is_available():
                     lightning_module.log_gpu_stats()
@@ -369,10 +381,10 @@ def train_alphazero(
         ramdisk_path = '/mnt/ramdisk/'
         hard_drive_path = 'nnbattle/agents/alphazero/model'
         shutil.copytree(ramdisk_path, hard_drive_path, dirs_exist_ok=True)
-        logger.info(f"Copied ramdisk contents from {ramdisk_path} to {hard_drive_path}")
+        print(f"Copied ramdisk contents from {ramdisk_path} to {hard_drive_path}")
 
         logger.info("=== Training Completed Successfully ===")
-        logger.info("Training completed. Final model saved.")
+        print("Training completed. Final model saved.")
 
     logger.info("=== Training Completed Successfully ===")
 

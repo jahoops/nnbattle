@@ -56,10 +56,10 @@ class MCTSNode:
         best_node = None
         epsilon = 1e-8  # Small value to prevent division by zero
         for child in self.children.values():
-            # Adjust denominator to add epsilon
+            # This is the UCB formula: Q(s,a) + c_puct * P(s,a) * sqrt(N(s)) / (1 + N(s,a))
             u = c_puct * child.prior * math.sqrt(self.visits + epsilon) / (1 + child.visits + epsilon)
             q = child.value / (1 + child.visits + epsilon)
-            score = q + u
+            score = q + u  # UCB score combines exploitation (q) and exploration (u)
             if score > best_score:
                 best_score = score
                 best_node = child
@@ -101,10 +101,9 @@ def mcts_simulate(agent, game: ConnectFourGame, team: int, temperature):
     
     valid_moves = game.get_valid_moves()
     
-    # Early in training, use mostly random play
-    if agent.mcts_simulations_per_move < 25:
+    # Early in training, use mostly random play for fast games
+    if agent.mcts_simulations_per_move < 25:  # This is causing the fast initial games
         action = np.random.choice(valid_moves)
-        # Use TensorManager to create the policy tensor
         policy = TensorManager.to_tensor(
             torch.zeros(agent.action_dim),
             dtype=torch.float32

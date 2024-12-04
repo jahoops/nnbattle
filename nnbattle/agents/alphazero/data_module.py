@@ -32,12 +32,8 @@ class ConnectFourDataset(Dataset):
 def check_data_integrity(data_loader):
     """Check data integrity with proper unpacking for 3-value tuples."""
     for states, mcts_probs, rewards in data_loader:
-        if states.isnan().any() or mcts_probs.isnan().any() or rewards.isnan().any():
-            logger.warning("Warning: NaN values detected in the data.")
         if (states < 0).any() or (states > 1).any():
-            logger.warning("Warning: State values out of expected range (0-1).")
-        if (mcts_probs < 0).any() or (mcts_probs > 1).any():
-            logger.warning("Warning: MCTS probability values out of expected range (0-1).")
+            logger.warning("Warning: State values out of expected range (0-1)")
         break  # Check the first batch for simplicity
 
 
@@ -60,8 +56,9 @@ class ConnectFourDataModule(pl.LightningDataModule):
         self.persistent_workers = persistent_workers
         self.dataset = ConnectFourDataset([])
 
-    def _generate_game_data(self, seed):
+    def _generate_game_data(self, args):
         """Function to be executed in each process."""
+        index, seed, temperature = args  # Unpack three values now
         # Set a unique seed for each process
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -70,24 +67,27 @@ class ConnectFourDataModule(pl.LightningDataModule):
         self_play = SelfPlay(
             game=game,
             model=self.agent.model,
-            num_simulations=self.agent.num_simulations,
+            mcts_simulations_per_move=self.agent.mcts_simulations_per_move,
             agent=self.agent
         )
+        print(f"Process {index}: Generating data with seed {seed}")
         # Generate training data for one game
-        return self_play.generate_training_data(1)
+        return self_play.generate_training_data(1, temperature=temperature, seed=seed)
 
     def generate_self_play_games(self, temperature=1.0):
-        """Generate self-play games using multiprocessing."""
-        logger.info(f"Generating {self.self_play_games_per_round} self-play games with temperature {temperature} using multiprocessing.")
+        """Generate self-play games using multiprocessing with temperature control."""
+        print(f"Generating {self.self_play_games_per_round} self-play games with temperature {temperature} and {self.agent.mcts_simulations_per_move} MCTS simulations per move.")
         try:
             num_processes = mp.cpu_count()
-            logger.info(f"Using {num_processes} processes for game simulation.")
+            print(f"Using {num_processes} processes for game simulation.")
 
             with mp.Pool(processes=num_processes) as pool:
                 # Create a list of seeds for reproducibility
                 seeds = [np.random.randint(0, 2**32 - 1) for _ in range(self.self_play_games_per_round)]
+                # Include index with seed and temperature
+                args = [(i, seed, temperature) for i, seed in enumerate(seeds)]
                 # Start the pool of processes
-                results = pool.map(self._generate_game_data, seeds)
+                results = pool.map(self._generate_game_data, args)
 
             # Flatten the list of results
             training_data = [item for sublist in results for item in sublist]

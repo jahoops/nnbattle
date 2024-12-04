@@ -1,5 +1,8 @@
 import logging
+# Set matplotlib and other loggers to only show warnings
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
+logging.getLogger('pytorch_lightning').setLevel(logging.WARNING)
+logging.getLogger('alphazero').setLevel(logging.WARNING)
 
 import os
 from nnbattle.agents.alphazero.agent_code import AlphaZeroAgent
@@ -29,9 +32,8 @@ def main():
         'initial_mcts_simulations_per_move': 800,  # Renamed parameter
         'max_mcts_simulations_per_move': 2000,     # Renamed parameter
         'simulation_increase_interval': 2,
-        'num_self_play_games': 10000,              # Renamed parameter
+        'self_play_games_per_round': 10000,              # Renamed parameter
         'num_evaluation_games': 20,
-        'evaluation_frequency': 1,
         'max_iterations': 200,                     # Renamed parameter
         # ... add other training parameters here ...
     }
@@ -49,7 +51,7 @@ def main():
     torch.multiprocessing.set_sharing_strategy('file_system')
 
     # Create model directory and backup untrained model
-    model_dir = "nnbattle/agents/alphazero/model"
+    model_dir = "mnt/ramdisk/"
     os.makedirs(model_dir, exist_ok=True)
     untrained_model_path = os.path.join(model_dir, "untrained_baseline.pth")
 
@@ -102,12 +104,11 @@ def main():
         train_alphazero(
             agent=agent,
             max_iterations=training_params['max_iterations'],
-            num_self_play_games=training_params['num_self_play_games'],
+            self_play_games_per_round=training_params['self_play_games_per_round'],
             initial_mcts_simulations_per_move=training_params['initial_mcts_simulations_per_move'],
             max_mcts_simulations_per_move=training_params['max_mcts_simulations_per_move'],
             simulation_increase_interval=training_params['simulation_increase_interval'],
             num_evaluation_games=training_params['num_evaluation_games'],
-            evaluation_frequency=training_params['evaluation_frequency'],
             use_gpu=True,
             save_checkpoint=True,
             checkpoint_frequency=1,
@@ -116,7 +117,7 @@ def main():
         
         # Test trained model
         logger.info("Testing trained model against random player...")
-        final_performance = evaluate_agent(agent, num_games=training_params['num_evaluation_games'])
+        final_performance = evaluate_agent(agent, num_games=training_params['num_evaluation_games'], temperature=0.1)
         logger.info(f"Training Results:")
         logger.info(f"Initial win rate: {initial_performance:.2f}")
         logger.info(f"Final win rate: {final_performance:.2f}")

@@ -86,7 +86,7 @@ if __name__ == "__main__":
         action_dim=7,
         state_dim=3,
         use_gpu=True,
-        num_simulations=0,
+        mcts_simulations_per_move=0,
         c_puct=1.4,
         load_model=True,
         model_path=BASELINE_MODEL_PATH,  # Load baseline model
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     agent_final = AlphaZeroAgent(
         action_dim=7,
         state_dim=3,
-        num_simulations=2000,
+        mcts_simulations_per_move=2000,
         c_puct=1.4,
         load_model=True,
         model_path=FINAL_MODEL_PATH,  # Load final model

@@ -56,7 +56,7 @@ class ConnectFourLightningModule(pl.LightningModule):
         torch.cuda.memory.empty_cache()
         
         # Reserve a pool of memory
-        self._reserve_memory = torch.cuda.FloatTensor(int(2e9))  # Reserve ~8GB
+        self._reserve_memory = torch.empty(int(2e9), dtype=torch.float32, device='cuda')  # Reserve ~8GB
         del self._reserve_memory  # Release but keep allocated
 
         # Remove CPU thread limitation
@@ -167,7 +167,7 @@ class ConnectFourLightningModule(pl.LightningModule):
             allocated = torch.cuda.memory_allocated() / 1e9
             reserved = torch.cuda.memory_reserved() / 1e9
             max_memory = torch.cuda.max_memory_allocated() / 1e9
-            logger.info(f"GPU Memory [GB] - Allocated: {allocated:.2f}, Reserved: {reserved:.2f}, Peak: {max_memory:.2f}")
+            print(f"GPU Memory [GB] - Allocated: {allocated:.2f}, Reserved: {reserved:.2f}, Peak: {max_memory:.2f}")
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(

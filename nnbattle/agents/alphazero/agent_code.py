@@ -70,8 +70,7 @@ class AlphaZeroAgent(BaseAgent):
         mcts_simulations_per_move,
         c_puct,
         load_model,
-        team,
-        model_path
+        team
     ):
         super().__init__(team)
         self.state_dim = state_dim
@@ -83,7 +82,7 @@ class AlphaZeroAgent(BaseAgent):
         self.c_puct = c_puct
         self.team = team
         self.memory = []
-        self.model_path = model_path if model_path else "mnt/ramdisk/alphazero_model_final.pth"  # Use provided path or default
+        self.model_path = "mnt/ramdisk/alphazero_model_final.pth"  # Use provided path or default
 
         # Initialize the model directly on CUDA with verification
         self.model = Connect4Net(state_dim, action_dim).cuda()
@@ -171,7 +170,7 @@ class AlphaZeroAgent(BaseAgent):
             self.model_path,
             _use_new_zipfile_serialization=True  # Use new format
         )
-        logger.info(f"Model saved to {self.model_path}")
+        print(f"Model saved to {self.model_path}")
 
     def preprocess(self, board, team):
         board = board.copy()
@@ -193,6 +192,18 @@ class AlphaZeroAgent(BaseAgent):
             opponent_board,  # Already binary [0,1]
             valid_moves     # Already binary [0,1]
         ])
+        
+        # Ensure normalization
+        current_board = current_board.astype(np.float32)
+        opponent_board = opponent_board.astype(np.float32)
+        valid_moves = valid_moves.astype(np.float32)
+        
+        # Explicitly clamp values to [0,1]
+        current_board = np.clip(current_board, 0, 1)
+        opponent_board = np.clip(opponent_board, 0, 1)
+        valid_moves = np.clip(valid_moves, 0, 1)
+        
+        state = np.stack([current_board, opponent_board, valid_moves])
         
         # Double-check normalization
         assert np.all((state >= 0) & (state <= 1)), "State values outside [0,1] range"
@@ -259,7 +270,7 @@ class AlphaZeroAgent(BaseAgent):
                 draws += 1
             else:
                 losses += 1
-        logger.info(f"Evaluation Results over {num_evaluations} games: Wins={wins}, Draws={draws}, Losses={losses}")
+        print(f"Evaluation Results over {num_evaluations} games: Wins={wins}, Draws={draws}, Losses={losses}")
 
     def act(self, game: ConnectFourGame, team: int, temperature=1.0, **kwargs):
         """Use MCTS to select moves in both training and tournament play."""

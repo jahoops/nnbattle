@@ -18,7 +18,7 @@ class SelfPlay:
         self.agent = agent
         # Remove or modify any attributes that cannot be pickled
 
-    def execute_self_play_game(self, game_num: int) -> Tuple[List[np.ndarray], List[np.ndarray], List[float]]:
+    def execute_self_play_game(self, game_num: int, temperature) -> Tuple[List[np.ndarray], List[np.ndarray], List[float]]:
         """Execute one self-play game with correct player turn management."""
         game = ConnectFourGame()
         states, policies, values = [], [], []
@@ -33,7 +33,7 @@ class SelfPlay:
                     break
 
                 # Get move from MCTS
-                action, policy = mcts_simulate(self.agent, game, current_player)
+                action, policy = mcts_simulate(self.agent, game, current_player, temperature)
 
                 # Make the move
                 if not game.make_move(action, current_player):
@@ -52,7 +52,7 @@ class SelfPlay:
 
             # Process game result
             result = game.get_game_state()
-            logger.info(f"Game {game_num} finished with result: {result}")
+            #logger.info(f"Game {game_num} finished with result: {result}")
             return self._process_game_history(game_history, result)
 
         except Exception as e:
@@ -73,28 +73,28 @@ class SelfPlay:
         
         return states, policies, values
 
-    def generate_training_data(self, self_play_games_per_round: int) -> List[Tuple]:
-        """Generate training data through self-play."""
-        logger.info(f"Starting self-play data generation for {self_play_games_per_round} games")
+    def generate_training_data(self, self_play_games_per_round: int, temperature=1.0, seed=0) -> List[Tuple]:
+        """Generate training data through self-play with temperature control."""
+        #print(f"Starting self-play data generation for {self_play_games_per_round} games (temperature={temperature})")
         training_data = []
         completed_games = 0
         
         try:
             for game in range(self_play_games_per_round):
+                #print(f"Game {game + 1}/{self_play_games_per_round}")
                 if hasattr(self, '_interrupt_requested'):
                     logger.info("Interrupt requested, saving current progress...")
                     break
-                    
-                #logger.info(f"Starting game {game + 1}/{self_play_games_per_round}")
                 try:
-                    states, policies, values = self.execute_self_play_game(game)
+                    states, policies, values = self.execute_self_play_game(game, temperature)
                     if states:
                         training_data.extend(zip(states, policies, values))
                         completed_games += 1
                         
-                    if game % 5 == 0:
-                        logger.info(f"Progress: {game + 1}/{self_play_games_per_round} games, "
-                                  f"Examples: {len(training_data)}")
+                    if seed > 0:
+                        print(f"Seed: {seed}, Examples: {len(training_data)}")
+                    elif game % 100 == 0:
+                        print(f"Progress: {game + 1}/{self_play_games_per_round} games, Examples: {len(training_data)}")
                         
                 except KeyboardInterrupt:
                     logger.info("Interrupt received during game, saving progress...")
@@ -103,6 +103,4 @@ class SelfPlay:
         except KeyboardInterrupt:
             logger.info("Interrupt received, saving current progress...")
         finally:
-            logger.info(f"Self-play ended with {len(training_data)} examples "
-                       f"from {completed_games} games")
             return training_data
