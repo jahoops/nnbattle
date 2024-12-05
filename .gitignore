@@ -7,3 +7,4 @@ tb_logs/
 model/
 *.log
 *.yaml
+*.pkl
